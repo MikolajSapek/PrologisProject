@@ -249,7 +249,7 @@ const createCustomTooltip = (sortBy: string, availableColumns: Array<{ key: stri
 };
 
 // Funkcja tworząca StockTile z dostępem do sortBy i availableColumns
-const createStockTile = (sortBy: string, availableColumns: Array<{ key: string; label: string }>) => {
+const createStockTile = (sortBy: string, availableColumns: Array<{ key: string; label: string }>, benchmark: number | null) => {
   const StockTile = (props: any) => {
     // 1. Destrukturyzacja props - dodajemy extraData i region bezpośrednio z props
     const { x, y, width, height, name, value, payload, extraData: propsExtraData, region: propsRegion } = props;
@@ -283,11 +283,29 @@ const createStockTile = (sortBy: string, availableColumns: Array<{ key: string; 
     // a jeśli tam nie ma, to w payload.extraData
     const dataDetails = propsExtraData || payload?.extraData || {};
 
+    // Pobieranie colorValue (occupancy) - sprawdzamy zarówno props jak i payload
+    const colorValue = props.colorValue !== undefined ? props.colorValue : (payload?.colorValue);
+
     // Jeśli kafelek jest mikroskopijny, nie renderuj
     if (width < 5 || height < 5) return <g />;
 
-    const baseRegionColor = getColorByRegion(region);
-    const bgColor = getTileColor(baseRegionColor, tileIndex, totalTiles);
+    // 4. NOWA LOGIKA KOLOROWANIA: Jeśli benchmark jest ustawiony, używamy zielonego/czerwonego
+    // w zależności od occupancy vs benchmark. W przeciwnym razie używamy oryginalnych kolorów regionu.
+    let bgColor: string;
+    if (benchmark !== null && colorValue !== undefined && colorValue !== null) {
+      // colorValue jest w formacie 0-1 (decimal), benchmark jest w formacie 0-100 (percentage)
+      // Konwertujemy benchmark na decimal dla porównania
+      const benchmarkDecimal = benchmark / 100;
+      if (colorValue >= benchmarkDecimal) {
+        bgColor = "#4ade80"; // Green
+      } else {
+        bgColor = "#f87171"; // Red
+      }
+    } else {
+      // Fallback do oryginalnej logiki kolorowania regionu
+      const baseRegionColor = getColorByRegion(region);
+      bgColor = getTileColor(baseRegionColor, tileIndex, totalTiles);
+    }
     
     // Pokazuj tekst tylko jeśli kafelek jest wystarczająco duży
     const showDetailText = width > 60 && height > 40;
@@ -322,6 +340,11 @@ const createStockTile = (sortBy: string, availableColumns: Array<{ key: string; 
       const currentSortBy = sortBy || props.sortBy || payload?.sortBy || 'value';
       
       if (currentSortBy === 'value') {
+        // Zamiast powierzchni, pokazujemy procent occupancy
+        if (colorValue !== undefined && colorValue !== null) {
+          return { label: '', value: `${(colorValue * 100).toFixed(1)}%` };
+        }
+        // Fallback do powierzchni jeśli brak occupancy
         const buildingArea = getBuildingAreaValue();
         if (buildingArea !== null) {
           return { label: '', value: `${buildingArea.toLocaleString()} m²` };
@@ -653,6 +676,9 @@ export function StockMap({ data, availableHeaders = [] }: StockMapProps) {
   
   // Stan widoku - domyślnie widok regionów
   const [viewMode, setViewMode] = useState<'regions' | 'country'>('regions');
+  
+  // Stan benchmarku - domyślnie null (wyłączony), wartość w procentach (0-100)
+  const [benchmark, setBenchmark] = useState<number | null>(null);
 
   // Funkcja transformująca dane do widoku płaskiego (bez regionów)
   const transformToFlatCountry = useCallback((regionsData: any[]) => {
@@ -1071,9 +1097,16 @@ export function StockMap({ data, availableHeaders = [] }: StockMapProps) {
         className="w-full border border-gray-200 rounded-lg overflow-hidden bg-white"
       >
         <div className="w-full bg-black text-white px-6 py-3 flex items-center justify-between">
-          <span className="font-semibold text-lg" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
-            {rootName}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-lg" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+              {rootName}
+            </span>
+            {benchmark !== null && (
+              <span className="text-sm text-gray-300" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+                • Benchmark: {benchmark}% (≥{benchmark}% = Green, &lt;{benchmark}% = Red)
+              </span>
+            )}
+          </div>
           <span className="text-sm" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
             Total Area: {totalArea.toLocaleString()} m²
           </span>
@@ -1097,6 +1130,11 @@ export function StockMap({ data, availableHeaders = [] }: StockMapProps) {
           <span className="text-sm text-gray-300" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
             • Sorting: {currentSortLabel}
           </span>
+          {benchmark !== null && (
+            <span className="text-sm text-gray-300" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
+              • Benchmark: {benchmark}% (≥{benchmark}% = Green, &lt;{benchmark}% = Red)
+            </span>
+          )}
         </div>
         <span className="text-sm" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
           Total Area: {totalArea.toLocaleString()} m²
@@ -1105,6 +1143,54 @@ export function StockMap({ data, availableHeaders = [] }: StockMapProps) {
 
       {/* 2. Pasek Sterowania (Zostanie POMINIĘTY na obrazku dzięki klasie exclude-from-capture) */}
       <div className="w-full px-6 py-3 bg-gray-50 border-b border-gray-200 exclude-from-capture">
+        {/* Benchmark Control - Above other controls */}
+        <div className="mb-3 pb-3 border-b border-gray-300">
+          <div className="flex items-center gap-3">
+            <label 
+              htmlFor="benchmark-input"
+              className="text-sm font-medium text-gray-700"
+              style={{ fontFamily: "Inter, sans-serif" }}
+            >
+              Occupancy Benchmark (%):
+            </label>
+            <input
+              id="benchmark-input"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={benchmark !== null ? benchmark : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  setBenchmark(null);
+                } else {
+                  const numValue = parseFloat(value);
+                  if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+                    setBenchmark(numValue);
+                  }
+                }
+              }}
+              placeholder="Enter benchmark (0-100)"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium text-gray-700"
+              style={{ fontFamily: "Inter, sans-serif", width: "200px" }}
+            />
+            {benchmark !== null && (
+              <button
+                onClick={() => setBenchmark(null)}
+                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-md transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
+                Clear
+              </button>
+            )}
+            <span className="text-xs text-gray-500" style={{ fontFamily: "Inter, sans-serif" }}>
+              {benchmark !== null 
+                ? `Tiles with occupancy ≥ ${benchmark}% will be green, others red`
+                : 'Set a benchmark to color tiles by occupancy'}
+            </span>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-3">
           {/* Lewa strona: Sortowanie i Przełącznik Widoku */}
           <div className="flex items-center gap-3">
@@ -1180,7 +1266,7 @@ export function StockMap({ data, availableHeaders = [] }: StockMapProps) {
             dataKey="sortValue"
             aspectRatio={16 / 9}
             stroke="#fff"
-            content={createStockTile(sortBy, getAvailableSortColumns) as any}
+            content={createStockTile(sortBy, getAvailableSortColumns, benchmark) as any}
             isAnimationActive={false}
           >
             <Tooltip content={createCustomTooltip(sortBy, getAvailableSortColumns)} />
