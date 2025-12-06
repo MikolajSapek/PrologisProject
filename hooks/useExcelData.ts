@@ -96,9 +96,11 @@ export function useExcelData() {
 
         const processedRows = forwardFillSparseColumns(jsonData, headers);
 
-        console.log("Parsed headers:", headers);
-        console.log("Processed rows count:", processedRows.length);
-        console.log("First row sample:", processedRows[0]);
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Parsed headers:", headers);
+          console.log("Processed rows count:", processedRows.length);
+          console.log("First row sample:", processedRows[0]);
+        }
 
         setParsedData({ headers, rows: processedRows });
       } catch (err) {
@@ -157,13 +159,15 @@ export function useExcelData() {
     );
 
     if (countryIdx === -1 || marketIdx === -1 || parkIdx === -1 || areaIdx === -1) {
-      console.warn("Missing required columns:", {
-        country: countryIdx !== -1,
-        market: marketIdx !== -1,
-        park: parkIdx !== -1,
-        area: areaIdx !== -1,
-        headers,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("Missing required columns:", {
+          country: countryIdx !== -1,
+          market: marketIdx !== -1,
+          park: parkIdx !== -1,
+          area: areaIdx !== -1,
+          headers,
+        });
+      }
       return null;
     }
 
@@ -173,20 +177,22 @@ export function useExcelData() {
     const areaKey = headers[areaIdx];
     const occupancyKey = occupancyIdx !== -1 ? headers[occupancyIdx] : null;
 
-    console.log("Using column keys:", {
-      countryKey,
-      marketKey,
-      parkKey,
-      areaKey,
-      occupancyKey,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Using column keys:", {
+        countryKey,
+        marketKey,
+        parkKey,
+        areaKey,
+        occupancyKey,
+      });
 
-    console.log("First 3 rows sample:", rows.slice(0, 3).map(row => ({
-      country: row[countryKey],
-      market: row[marketKey],
-      park: row[parkKey],
-      area: row[areaKey],
-    })));
+      console.log("First 3 rows sample:", rows.slice(0, 3).map(row => ({
+        country: row[countryKey],
+        market: row[marketKey],
+        park: row[parkKey],
+        area: row[areaKey],
+      })));
+    }
 
     const countryMap = new Map<
       string,
@@ -233,7 +239,7 @@ export function useExcelData() {
       if (!country || country.toLowerCase() === "total") {
         skippedRows++;
         skippedReasons["no_country"] = (skippedReasons["no_country"] || 0) + 1;
-        if (idx < 5) {
+        if (idx < 5 && process.env.NODE_ENV === 'development') {
           console.log(`Row ${idx} - no country:`, { countryRaw, country, row: Object.keys(row) });
         }
         return;
@@ -241,7 +247,7 @@ export function useExcelData() {
       if (!market || market.toLowerCase() === "total") {
         skippedRows++;
         skippedReasons["no_market"] = (skippedReasons["no_market"] || 0) + 1;
-        if (idx < 5) {
+        if (idx < 5 && process.env.NODE_ENV === 'development') {
           console.log(`Row ${idx} - no market:`, { marketRaw, market });
         }
         return;
@@ -255,7 +261,7 @@ export function useExcelData() {
         skippedRows++;
         skippedReasons["invalid_area"] =
           (skippedReasons["invalid_area"] || 0) + 1;
-        if (idx < 5) {
+        if (idx < 5 && process.env.NODE_ENV === 'development') {
           console.log(`Row ${idx} - invalid area:`, { areaRaw, area, areaKey });
         }
         return;
@@ -275,31 +281,37 @@ export function useExcelData() {
       parkMap.set(park, { area, occupancy, rowData: row });
     });
 
-    console.log("Row filtering results:", {
-      totalRows: rows.length,
-      skippedRows,
-      skippedReasons,
-      validRows: rows.length - skippedRows,
-      countriesFound: countryMap.size,
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Row filtering results:", {
+        totalRows: rows.length,
+        skippedRows,
+        skippedReasons,
+        validRows: rows.length - skippedRows,
+        countriesFound: countryMap.size,
+      });
+    }
 
     if (countryMap.size === 0) {
-      console.warn("No valid data rows found after filtering");
+      if (process.env.NODE_ENV === 'development') {
+        console.warn("No valid data rows found after filtering");
+      }
       return null;
     }
 
-    console.log("Treemap data built successfully:", {
-      countries: countryMap.size,
-      totalParks: Array.from(countryMap.values()).reduce(
-        (sum, marketMap) =>
-          sum +
-          Array.from(marketMap.values()).reduce(
-            (s, parkMap) => s + parkMap.size,
-            0
-          ),
-        0
-      ),
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Treemap data built successfully:", {
+        countries: countryMap.size,
+        totalParks: Array.from(countryMap.values()).reduce(
+          (sum, marketMap) =>
+            sum +
+            Array.from(marketMap.values()).reduce(
+              (s, parkMap) => s + parkMap.size,
+              0
+            ),
+          0
+        ),
+      });
+    }
 
     const countryNodes: TreeMapNode[] = Array.from(countryMap.entries()).map(
       ([country, marketMap]) => {
