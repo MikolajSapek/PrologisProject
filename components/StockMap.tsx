@@ -340,11 +340,12 @@ const createStockTile = (sortBy: string, availableColumns: Array<{ key: string; 
       const currentSortBy = sortBy || props.sortBy || payload?.sortBy || 'value';
       
       if (currentSortBy === 'value') {
-        // Zamiast powierzchni, pokazujemy procent occupancy
-        if (colorValue !== undefined && colorValue !== null) {
+        // Jeśli benchmark jest włączony, pokazujemy procent occupancy
+        // W przeciwnym razie pokazujemy powierzchnię
+        if (benchmark !== null && colorValue !== undefined && colorValue !== null) {
           return { label: '', value: `${(colorValue * 100).toFixed(1)}%` };
         }
-        // Fallback do powierzchni jeśli brak occupancy
+        // Gdy benchmark wyłączony - pokazujemy powierzchnię
         const buildingArea = getBuildingAreaValue();
         if (buildingArea !== null) {
           return { label: '', value: `${buildingArea.toLocaleString()} m²` };
