@@ -43,8 +43,8 @@ export default function Home() {
                 Privacy & Security
               </p>
               <p className="text-xs text-blue-800">
-                Twoje pliki są przetwarzane <strong>lokalnie w przeglądarce</strong> i nie są wysyłane na serwer. 
-                Wszystkie dane pozostają na Twoim urządzeniu i znikają po odświeżeniu strony.
+                Your files are processed <strong>locally in your browser</strong> and are not sent to any server. 
+                All data remains on your device and is cleared when you refresh the page.
               </p>
             </div>
           </div>
